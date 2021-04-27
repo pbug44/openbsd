@@ -1,0 +1,3 @@
+To make:
+
+MACHINE=macppc64 make
