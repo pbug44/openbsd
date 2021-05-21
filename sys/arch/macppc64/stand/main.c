@@ -67,6 +67,8 @@ char bootdev[128];
 int boothowto;
 int debug;
 
+extern char *environ;
+
 void get_alt_bootdev(char *, size_t, char *, size_t);
 
 static void
@@ -124,7 +126,7 @@ chain(void (*entry)(), char *args, uint64_t *ssym, uint64_t *esym, void *fdt)
 
 char bootline[512];
 
-extern void * fdt_setup(void);
+extern void * fdt_setup(int);
 extern char *kernelfile;
 
 int
@@ -181,6 +183,7 @@ void
 run_loadfile(uint64_t *marks, int howto)
 {
 	char bootline[512];		/* Should check size? */
+	int fdt_debug, fdtlen, i;
 	u_int32_t entry;
 	char *cp;
 	void *ssym, *esym;
@@ -209,7 +212,16 @@ run_loadfile(uint64_t *marks, int howto)
 	ssym = (void *)marks[MARK_SYM];
 	esym = (void *)marks[MARK_END];
 	{
-		fdt = fdt_setup();
+		/* check for debug environment */
+		fdtlen = strlen("fdt_debug=1");
+		for (i = 0, fdt_debug = 0; environ[i + fdtlen] != '\0'; i++) {
+			if (strncmp(&environ[i], "fdt_debug=1", fdtlen) == 0) {
+				fdt_debug = 1;
+				break;
+			}
+		}
+
+		fdt = fdt_setup(fdt_debug);
 
 		u_int32_t lastpage;
 		lastpage = roundup(marks[MARK_END], PAGE_SIZE);

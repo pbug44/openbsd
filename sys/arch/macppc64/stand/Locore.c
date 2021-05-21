@@ -45,7 +45,7 @@
 
 int main(void);
 void syncicache(void *, int);
-void * fdt_setup(void);
+void * fdt_setup(int);
 char * fdt_path_simplify(char *path);
 char * fdt_get_str(uint32_t);
 #define ENABLE_DECREMENTER_WORKAROUND
@@ -675,7 +675,7 @@ setup()
 }
 
 void *
-fdt_setup(void)
+fdt_setup(int fdt_debug)
 {
 	uint len, node, devnode, chosen, savenode;
 	size_t fdt_size = (1024 * 1024);
@@ -688,9 +688,8 @@ fdt_setup(void)
 		char *prop;
 	char alias[1024];
 
-#ifdef DEBUG
-	printf("[Scanning OpenFirmware, please wait...]\n");
-#endif
+	if (fdt_debug)
+		printf("[Scanning OpenFirmware, please wait...]\n");
 
 	fdt = fdt_alloc(fdt_size, fdt_size, fdt_size);
 	if (fdt == NULL) {
@@ -729,12 +728,13 @@ fdt_setup(void)
 		}
 	}
 
-#if DEBUG
-	printf("printing tree\n");
-	fdt_print_tree();
+	if (fdt_debug) {
+		printf("printing tree\n");
+		fdt_print_tree();
 
-	printf("[fdt is at 0x%x]\n", fdt);
-#endif
+		printf("[fdt is at 0x%x]\n", fdt);
+	}
+
 	printf("\n");
 
 	fdt_finalize();
