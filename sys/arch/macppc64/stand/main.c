@@ -214,10 +214,18 @@ run_loadfile(uint64_t *marks, int howto)
 	{
 		/* check for debug environment */
 		fdtlen = strlen("fdt_debug=1");
-		for (i = 0, fdt_debug = 0; environ[i + fdtlen] != '\0'; i++) {
-			if (strncmp(&environ[i], "fdt_debug=1", fdtlen) == 0) {
-				fdt_debug = 1;
+		for (i = 0; i < fdtlen; i++) {
+			if (environ[i] == '\0')
 				break;
+		}
+		if (environ[i] != '\0') {
+			for (i = 0, fdt_debug = 0; 
+					environ[i + fdtlen] != '\0'; i++) {
+				if (strncmp(&environ[i], "fdt_debug=1", 
+							fdtlen) == 0) {
+					fdt_debug = 1;
+					break;
+				}
 			}
 		}
 
