@@ -27,8 +27,9 @@
 	.globl _start
 _start:
 	mr	%r14, %r3	/* device tree */
-
+	
 	bl	1f
+
 1:	mflr	%r30
 
 	addis	%r1, %r30, (initstack_end - 1b)@ha

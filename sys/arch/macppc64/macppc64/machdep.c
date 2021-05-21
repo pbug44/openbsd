@@ -36,6 +36,7 @@
 #include <machine/pcb.h>
 #include <machine/psl.h>
 #include <machine/trap.h>
+#include <machine/bus.h>
 
 #include <net/if.h>
 #include <uvm/uvm_extern.h>
@@ -108,9 +109,20 @@ void parse_bootargs(const char *);
 const char *parse_bootduid(const char *);
 const char *parse_bootmac(const char *);
 
-void g5_display_console(void *);
+struct gvfb {
+        struct rasops_info      ri;
+        struct wsscreen_descr   wsd;
+};
+
+/* Early boot framebuffer */
+static struct gvfb gvfb;
+
+
+void g5_display_console(void);
 void * g5_mapiodev(paddr_t, psize_t);
-char * simplify_path(char *);
+void g5fb_init_cons(bus_space_tag_t, struct gvfb *);
+int g5fb_init(int, struct rasops_info *);
+void * fdt_find_cons_g5(void);
 
 paddr_t fdt_pa;
 size_t fdt_size;
@@ -140,6 +152,29 @@ atoi(const char *s)
 	}
 
 	return (neg ? -n : n);
+}
+
+void *
+fdt_find_cons_g5(void)
+{
+	char *alias = "screen";
+	void *stdout = NULL;
+	void *node;
+
+	node = fdt_find_node("/aliases");
+	if (node)
+		fdt_node_property(node, alias, (char **)&stdout);
+
+	/* Lookup the physical address of the interface. */
+	if (stdout) {
+		node = fdt_find_node(stdout);
+		if (node) {
+			stdout_node = OF_finddevice(stdout);
+			return (node);
+		}
+	}
+
+	return (NULL);
 }
 
 void *
@@ -200,7 +235,7 @@ init_powernv(void *fdt, void *tocbase)
 	void *node;
 	char *prop;
 	int len;
-	int i;
+	int i, machine_is_a_g5 = 0;
 
 	/* Store pointer to our struct cpu_info. */
 	__asm volatile ("mtsprg0 %0" :: "r"(cpu_info_primary));
@@ -236,32 +271,11 @@ init_powernv(void *fdt, void *tocbase)
 	} else {
 		node = fdt_find_node("/aliases");
 		if (node) {
-			char alias[1024];
-			char *p;
-			void *child;
-
 			fdt_node_property(node, "screen", &prop);
-			strlcpy(alias, simplify_path(prop), sizeof(alias));
-			p = alias;
-			if (*p == '/')
-				p++;
-		
-
-        		for (child = fdt_find_node(prop); child; child = fdt_next_node(child)) {
-				if (strcmp(p, simplify_path(fdt_node_name(child))) == 0) {
-					break;
-				}
+			if (prop != NULL) {
+				machine_is_a_g5 = 1;
+				g5_display_console();
 			}
-
-                	fdt_node_property(child, "device_type", &prop);
-                	if (strcmp(prop, "display") == 0) {
-				g5_display_console(child);
-			} else if (strcmp(prop, "serial") == 0) {
-
-				panic("no serial");
-
-			} else
-				panic("no go");
 		}
 
 	}
@@ -273,7 +287,10 @@ init_powernv(void *fdt, void *tocbase)
 	fdt_pa = (paddr_t)fdt;
 	fdt_size = fdt_get_size(fdt);
 
-	fdt_find_cons();
+	if (machine_is_a_g5)
+		fdt_find_cons_g5();
+	else
+		fdt_find_cons();
 
 	/*
 	 * Initialize all traps with the stub that calls the generic
@@ -1201,125 +1218,15 @@ doreset:
 	/* NOTREACHED */
 }
 
-struct gvfb {
-        struct rasops_info      ri;
-        struct wsscreen_descr   wsd;
-};
-
-/* Early boot framebuffer */
-static struct gvfb gvfb;
-
 
 void
-g5_display_console(void *node)
+g5_display_console(void)
 {
-        int cons_height, cons_width, cons_linebytes, cons_depth;
-        uint32_t cons_addr;
-	char *prop;
-        char name[32];
-        int len, err;
-        // int stdout_node;
+	struct gvfb *fb = &gvfb;
+	bus_space_tag_t iot;
 
-        struct gvfb *fb = &gvfb;
-        struct rasops_info ri;
-        uint32_t defattr;
+	g5fb_init_cons(iot, fb);
 
-        len = fdt_node_property(node, "name", &prop);
-	strlcpy(name, prop, sizeof(name));
-
-        //printf("console out [%s]", name);
-
-        err = fdt_node_property(node, "width", &prop);
-        if ( err != 4) {
-                cons_width = 0;
-        } else
-		cons_width = bemtoh32((uint32_t *)prop);
-
-        err = fdt_node_property(node, "linebytes", &prop);
-        if ( err != 4) {
-                cons_linebytes = cons_width;
-        } else
-		cons_linebytes = bemtoh32((uint32_t *)prop);
-
-        err = fdt_node_property(node, "height", &prop);
-        if ( err != 4) {
-                cons_height = 0;
-        } else
-		cons_height = bemtoh32((uint32_t *)prop);
-
-        err = fdt_node_property(node, "depth", &prop);
-        if ( err != 4) {
-                cons_depth = 0;
-        } else
-		cons_depth = bemtoh32((uint32_t *)prop);
-
-        err = fdt_node_property(node, "address", &prop);
-        if ( err != 4) {
-                //OFerpret("frame-buffer-adr", 1, &cons_addr);
-        } else
-		cons_addr = bemtoh32((uint32_t *)prop);
-
-	// ofw_find_keyboard();
-
-#if 0
-        len = fdt_node_property(node, "assigned-addresses", &prop);
-	if (len == -1) {
-		panic("assigned-addresses");
-	} else
-		addr = bemtoh32((uint32_t *)prop);
-#endif
-
-#if 0
-        if (len == -1) {
-                fbnode = OF_parent(stdout_node);
-                len = OF_getprop(fbnode, "name", name, 20);
-                name[len] = 0;
-
-                printf("using parent %s:", name);
-                len = OF_getprop(fbnode, "assigned-addresses",
-                        addr, sizeof(addr));
-                if (len < sizeof(addr[0])) {
-                        panic(": no address");
-                }
-        }
-#endif
-
-#if 0
-        if (OF_getnodebyname(0, "backlight") != 0) {
-                cons_backlight_available = 1;
-                cons_backlight = WSDISPLAYIO_VIDEO_ON;
-                of_setbrightness(DEFAULT_BRIGHTNESS);
-	}
-#endif
-
-        ri.ri_width = cons_width;
-        ri.ri_height = cons_height;
-        ri.ri_depth = cons_depth;
-        ri.ri_stride = cons_linebytes;
-        ri.ri_flg = RI_CENTER | RI_FULLCLEAR | RI_CLEAR;
-	ri.ri_bits = (void *)g5_mapiodev(cons_addr, cons_linebytes * cons_height);
-	
-        ri.ri_hw = fb;
-
-#if 0
-        if (cons_depth == 8)
-                of_setcolors(rasops_cmap, 0, 256);
-#endif
-
-        rasops_init(&ri, 160, 160);
-
-        strlcpy(fb->wsd.name, "std", sizeof(fb->wsd.name));
-        fb->wsd.capabilities = ri.ri_caps;
-        fb->wsd.ncols = ri.ri_cols;
-        fb->wsd.nrows = ri.ri_rows;
-        fb->wsd.textops = &ri.ri_ops;
-
-        ri.ri_ops.pack_attr(&ri, 0, 0, 0, &defattr);
-        wsdisplay_cnattach(&fb->wsd, &ri, 0, 0, defattr);
-
-	memset(&ri.ri_bits, 0x00, 120 * cons_linebytes);
-	memset(&ri.ri_bits, 0xFF, 60 * cons_linebytes);
-	memset(&ri.ri_bits, 0x00, 30 * cons_linebytes);
 }
 
 void *
@@ -1348,21 +1255,69 @@ g5_mapiodev(paddr_t pa, psize_t len)
         return (void *) (va+off);
 }
 
-char *
-simplify_path(char *path)
+/* from simplefb_init_cons... */
+
+void
+g5fb_init_cons(bus_space_tag_t iot, struct gvfb *fb)
 {
-	static char result[1024];
-	char *output = &result[0];
-	char *p;
+        struct rasops_info *ri = &fb->ri;
+	bus_space_handle_t ioh;
+	struct fdt_reg reg;
+	void *node = NULL;
+	uint32_t defattr = 0;
 	
-	for (p = path; *p; p++) {
-		if (*p == '@')
-			while (*p && *++p != '/');
+	node = fdt_find_cons_g5();
+	if (node == NULL)
+		return;
+
+	if (fdt_get_reg(node, 0, &reg))
+		return;
+
+	if (bus_space_map(iot, reg.addr, reg.size,
+		BUS_SPACE_MAP_LINEAR | BUS_SPACE_MAP_PREFETCHABLE, &ioh))
+		return;
+
+	ri->ri_bits = bus_space_vaddr(iot, ioh);
 	
-		*output++ = *p;
-	}	
+	if (g5fb_init(stdout_node, ri))
+		return;
 
-	*output = '\0';
+#if 0
+	ri->ri_bs = simplefb_bs;
+#endif
 
-	return (&result[0]);
+	rasops_init(ri, 160, 160);
+	
+	fb->wsd.capabilities = ri->ri_caps;
+	fb->wsd.ncols = ri->ri_cols;
+	fb->wsd.nrows = ri->ri_rows;
+	fb->wsd.textops = &ri->ri_ops;
+#if 0
+	fb->wsd.fontwidth = ri->ri_font->fontwidth;
+	fb->wsd.fontheight = ri->ri_font->fontheight;
+#endif
+	
+	ri->ri_ops.pack_attr(ri, 0, 0, 0, &defattr);
+	wsdisplay_cnattach(&fb->wsd, ri, 0, 0, defattr);
+
+	memset(&ri->ri_bits, 0x00, 1200 * ri->ri_stride);
+	memset(&ri->ri_bits, 0xFF, 600 * ri->ri_stride);
+	memset(&ri->ri_bits, 0x00, 300 * ri->ri_stride);
+
+#if NUKBD > 0
+	/* allow USB keyboards */
+	ukbd_cnattach();
+#endif
+}
+
+int
+g5fb_init(int node, struct rasops_info *ri)
+{
+	ri->ri_width = OF_getpropint(node, "width", 0);
+	ri->ri_height = OF_getpropint(node, "height", 0);
+	ri->ri_stride = OF_getpropint(node, "linebytes", 0);
+	ri->ri_depth = OF_getpropint(node, "depth", 0);
+        ri->ri_flg = RI_CENTER | RI_FULLCLEAR | RI_CLEAR;
+	
+	return 0;
 }

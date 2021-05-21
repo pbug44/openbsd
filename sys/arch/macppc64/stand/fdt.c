@@ -585,7 +585,15 @@ fdt_print_property(void *node, int level)
 
 	if (!strcmp(tmp, "device_type") || !strcmp(tmp, "compatible") ||
 	    !strcmp(tmp, "model") || !strcmp(tmp, "bootargs") ||
-	    !strcmp(tmp, "linux,stdout-path") || !strcmp(tmp, "name")) {
+	    !strcmp(tmp, "linux,stdout-path") || !strcmp(tmp, "name") ||
+		!strcmp(tmp , "kbd") || !strcmp(tmp , "screen") || 
+		!strcmp(tmp , "keyboard") || !strcmp(tmp , "mac-io") || 
+		!strcmp(tmp , "cdrom") || !strcmp(tmp , "cd") ||
+		!strcmp(tmp , "ide0") || !strcmp(tmp , "sccb") || 
+		!strcmp(tmp , "scca") || !strcmp(tmp , "rtc") || 
+		!strcmp(tmp , "adb-mouse") || !strcmp(tmp , "adb-keyboard") || 
+		!strcmp(tmp , "via-cuda") || !strcmp(tmp , "nvram")) {
+
 		printf("%s", value);
 	} else if (!strcmp(tmp, "clock-frequency") ||
 	    !strcmp(tmp, "timebase-frequency")) {

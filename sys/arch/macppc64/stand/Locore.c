@@ -682,7 +682,7 @@ fdt_setup(void)
 	int error = 0;
 	char nextprop[1024], walkbuf[33];
 	char *property, *p;
-	void *fnode, *fchild, *child;
+	void *fnode, *fchild, *child, *gcard = NULL;
 	static void *fdt = NULL;
 		void *mynode;
 		char *prop;
@@ -716,8 +716,10 @@ fdt_setup(void)
 		nextprop[len] = '\0';
 		p = nextprop;
 
+#if 0
 		while (*p == '/')
 			p++;
+#endif
 
 		fdt_node_add_node(fnode, p, &fchild);
 		ofw2fdt_property(devnode, fchild);
@@ -727,8 +729,6 @@ fdt_setup(void)
 		}
 	}
 
-	fdt_finalize();
-
 #if DEBUG
 	printf("printing tree\n");
 	fdt_print_tree();
@@ -737,34 +737,7 @@ fdt_setup(void)
 #endif
 	printf("\n");
 
-	
-		mynode = fdt_find_node("/aliases");
-		if (! mynode)
-			_rtt();
-
-		printf("looking for screen on /aliases\n");
-		printf("return value of fdt_node_property = %d\n", fdt_node_property(mynode, "screen", &prop));
-
-		strlcpy(alias, fdt_path_simplify(prop), sizeof(alias));
-		p = alias;
-		if (*p == '/')
-			p++;
-		printf("prop = %s\n", p);
-		
-
-        	for (child = fdt_find_node(prop); child; child = fdt_next_node(child)) {
-			if (strcmp(p, fdt_path_simplify(fdt_node_name(child))) == 0) {
-				fdt_print_node(child, 1);
-				break;
-			}
-		}
-
-		printf("getting device_type property\n");
-                fdt_node_property(child, "device_type", &prop);
-                if (strcmp(prop, "display") == 0) {
-			printf("display found!\n");	
-		} else
-			printf("no display found\n");
+	fdt_finalize();
 
 	return (fdt);
 }
@@ -979,23 +952,4 @@ recurse_ofw2fdt(int devnode, char *val, void *fnode)
 			recurse_ofw2fdt(node, nextprop, fnode);
 
 	}
-}
-
-char *
-fdt_path_simplify(char *path)
-{
-	static char result[1024];
-	char *output = &result[0];
-	char *p;
-	
-	for (p = path; *p; p++) {
-		if (*p == '@')
-			while (*p && *++p != '/');
-	
-		*output++ = *p;
-	}	
-
-	*output = '\0';
-
-	return (&result[0]);
 }
