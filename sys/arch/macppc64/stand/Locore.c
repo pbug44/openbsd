@@ -724,7 +724,7 @@ fdt_setup(int fdt_debug)
 		ofw2fdt_property(devnode, fchild);
 
 		if (OF_child(devnode) != 0) {
-			recurse_ofw2fdt(devnode, nextprop, fnode);
+			recurse_ofw2fdt(devnode, nextprop, fchild);
 		}
 	}
 
@@ -949,7 +949,7 @@ recurse_ofw2fdt(int devnode, char *val, void *fnode)
 		ofw2fdt_property(node, fchild);
 
 		if (OF_child(node) != 0)
-			recurse_ofw2fdt(node, nextprop, fnode);
+			recurse_ofw2fdt(node, nextprop, fchild);
 
 	}
 }
