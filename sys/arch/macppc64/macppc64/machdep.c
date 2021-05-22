@@ -119,7 +119,6 @@ static struct gvfb gvfb;
 
 
 void g5_display_console(void);
-void * g5_mapiodev(paddr_t, psize_t);
 void g5fb_init_cons(bus_space_tag_t, struct gvfb *);
 int g5fb_init(int, struct rasops_info *);
 void * fdt_find_cons_g5(void);
@@ -276,7 +275,8 @@ init_powernv(void *fdt, void *tocbase)
 				machine_is_a_g5 = 1;
 				g5_display_console();
 			}
-		}
+		} else
+			panic("no G5");
 
 	}
 
@@ -1227,32 +1227,6 @@ g5_display_console(void)
 
 	g5fb_init_cons(iot, fb);
 
-}
-
-void *
-g5_mapiodev(paddr_t pa, psize_t len)
-{
-        paddr_t spa;
-        vaddr_t vaddr, va;
-        int off;
-        int size;
-
-        spa = trunc_page(pa);
-        off = pa - spa;
-        size = round_page(off+len);
-
-        va = (vaddr_t)km_alloc(size, &kv_any, &kp_none, &kd_nowait);
-        if (va == 0)
-        	return (NULL);
-
-        for (vaddr = va; size > 0; size -= PAGE_SIZE) {
-                pmap_kenter_pa(vaddr, spa, PROT_READ | PROT_WRITE);
-                spa += PAGE_SIZE;
-                vaddr += PAGE_SIZE;
-        }
-        pmap_update(pmap_kernel());
-
-        return (void *) (va+off);
 }
 
 /* from simplefb_init_cons... */

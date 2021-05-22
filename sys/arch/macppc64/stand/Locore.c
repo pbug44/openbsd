@@ -724,7 +724,7 @@ fdt_setup(int fdt_debug)
 		ofw2fdt_property(devnode, fchild);
 
 		if (OF_child(devnode) != 0) {
-			recurse_ofw2fdt(devnode, nextprop, fchild);
+			recurse_ofw2fdt(devnode, nextprop, fnode);
 		}
 	}
 
@@ -932,7 +932,7 @@ static void
 recurse_ofw2fdt(int devnode, char *val, void *fnode)
 {
 	char nextprop[1024];
-	char *cval, *p;
+	char *cval, *p, *slash;
 	void *fchild;
 	int clen, node, savenode;
 
@@ -940,12 +940,18 @@ recurse_ofw2fdt(int devnode, char *val, void *fnode)
 
 		clen = OF_package_to_path(node, (char *)&nextprop, sizeof(nextprop) - 1);
 		nextprop[clen] = '\0';
-		p = nextprop;
 
-		while (*p == '/')
-			p++;
 
-		fdt_node_add_node(fnode, p, &fchild);
+		/* rudamentary strrchr() */
+		for (p = nextprop, slash = NULL; *p; p++)
+			if (*p == '/')
+				slash = p;
+
+		if (slash == NULL)
+			_rtt();
+		slash++;
+
+		fdt_node_add_node(fnode, slash, &fchild);
 		ofw2fdt_property(node, fchild);
 
 		if (OF_child(node) != 0)
